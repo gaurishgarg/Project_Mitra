@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spatial Reasoning Session Dashboard</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#182230;--muted:#697586;--line:#e7ebf1;--accent:#3157d5;--teal:#0e8a83;--orange:#d97706;--red:#c2414b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,Segoe UI,Arial,sans-serif}
+header{padding:26px max(22px,calc((100% - 1380px)/2));background:#17233d;color:#fff}
+header h1{margin:0 0 5px;font-size:25px;font-weight:700}header p{margin:0;color:#c7d1e3}
+main{max-width:1380px;margin:22px auto;padding:0 20px 40px}
+.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px}
+input[type=file],select,button{font:inherit}input[type=file]{max-width:300px}select,button{border:1px solid #d7deea;border-radius:8px;padding:8px 11px;background:#fff;color:var(--ink)}
+button{background:var(--accent);color:#fff;border:0;cursor:pointer}button.secondary{background:#edf1fb;color:#2947a8}button:hover{filter:brightness(.96)}
+#fileName{color:var(--muted);font-size:12px}.hint{color:var(--muted);font-size:12px;margin-left:auto}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:27px;font-weight:750;margin-top:5px}.metric .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.two{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 12px}.chart{height:260px;min-height:220px;position:relative;overflow:auto}.chart canvas{display:block;width:100%;}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;margin-top:8px}
+.legend span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--swatch);margin-right:5px}
+.tablewrap{overflow:auto;max-height:320px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:#fff}
+.pill{display:inline-block;padding:3px 7px;border-radius:20px;background:#edf1fb;color:#2947a8;font-size:11px}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+.empty{padding:36px;text-align:center;color:var(--muted);background:#fff;border:1px dashed #cbd3e1;border-radius:12px}
+.footer{color:var(--muted);font-size:11px;text-align:center;margin-top:18px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two,.three{grid-template-columns:1fr}}
+@media(max-width:520px){.grid{grid-template-columns:1fr 1fr}header h1{font-size:20px}.metric .value{font-size:22px}}
+</style>
+</head>
+<body>
+<header><h1>Spatial Reasoning · Session Dashboard</h1><p>Inspect activity flow, recorded responses, device connection status and logged 3D transforms.</p></header>
+<main>
+<div class="toolbar">
+  <input id="csvFile" type="file" accept=".csv,text/csv">
+  <span id="fileName">Choose a Unity session CSV to begin.</span>
+  <label>Screen
+    <select id="screenFilter"><option value="">All screens</option></select>
+  </label>
+  <label>Activity
+    <select id="activityFilter"><option value="">All activity sets</option></select>
+  </label>
+  <button class="secondary" id="resetFilters">Reset filters</button>
+  <span class="hint">Runs locally in your browser · No upload</span>
+</div>
+<div id="empty" class="empty">Select a session CSV file. The dashboard will calculate summaries directly from its rows.</div>
+<div id="dashboard" hidden>
+  <section class="grid">
+    <div class="card metric"><div class="label">Recorded rows</div><div class="value" id="mRows">—</div><div class="sub">Rows after filters</div></div>
+    <div class="card metric"><div class="label">Session duration</div><div class="value" id="mDuration">—</div><div class="sub">From first to last visible timestamp</div></div>
+    <div class="card metric"><div class="label">Activity rows</div><div class="value" id="mActivity">—</div><div class="sub">ScreenType = Activity</div></div>
+    <div class="card metric"><div class="label">Activity ends marked true</div><div class="value" id="mEnds">—</div><div class="sub">ActivityCorrectEnd = true</div></div>
+  </section>
+  <section class="two">
+    <div class="card"><h2>Screen activity over time</h2><div class="chart"><canvas id="screenChart"></canvas></div></div>
+    <div class="card"><h2>Activity sets over time</h2><div class="chart"><canvas id="activityChart"></canvas></div></div>
+  </section>
+  <section class="three">
+    <div class="card"><h2>Answer markers over time</h2><div class="chart"><canvas id="answerChart"></canvas></div></div>
+    <div class="card"><h2>Connection status over time</h2><div class="chart"><canvas id="statusChart"></canvas></div></div>
+    <div class="card"><h2>Objects in focus over time</h2><div class="chart"><canvas id="objectChart"></canvas></div></div>
+  </section>
+  <section class="two">
+    <div class="card"><h2>Recorded activity-set sequence</h2><div class="tablewrap"><table><thead><tr><th>Activity set</th><th>Rows</th><th>Object(s) in focus</th><th>Answer marker(s)</th><th>End marked true</th></tr></thead><tbody id="activityTable"></tbody></table></div></div>
+    <div class="card"><h2>Transform changes over time</h2><div class="chart"><canvas id="movementChart"></canvas></div><div class="note">Shows the number of distinct logged position and rotation values between consecutive rows. It is a change indicator, not a measure of learner skill or physical Micro:bit movement.</div></div>
+  </section>
+  <section class="card"><h2>Recent log records</h2><div class="tablewrap"><table><thead><tr><th>Timestamp</th><th>Screen</th><th>Activity set</th><th>Object</th><th>Status</th><th>Answer</th><th>End true</th></tr></thead><tbody id="recordsTable"></tbody></table></div></section>
+  <div class="footer">Interpretation note: these are descriptive summaries of the supplied log file. They do not establish learning gains, correctness of unscored responses, or learner characteristics.</div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let allRows=[], headers=[];
+function parseCSV(text){
+  const out=[]; let row=[], field='', q=false;
+  for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];
+    if(c==='"'&&q&&n==='"'){field+='"';i++}
+    else if(c==='"')q=!q;
+    else if(c===','&&!q){row.push(field);field=''}
+    else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&n==='\n')i++;row.push(field);if(row.some(x=>x.trim()!==''))out.push(row);row=[];field=''}
+    else field+=c;
+  }
+  row.push(field);if(row.some(x=>x.trim()!==''))out.push(row);
+  if(!out.length)return [];
+  headers=out.shift().map(x=>x.trim().replace(/^\uFEFF/,''));
+  return out.map(a=>{const o={};headers.forEach((h,i)=>o[h]=(a[i]??'').trim());return o});
+}
+const val=(r,k)=>r[k]??'';
+const clean=s=>s===''||s==null?'(blank)':String(s);
+const countBy=(rows,key)=>{const m={};rows.forEach(r=>{let k=clean(val(r,key));m[k]=(m[k]||0)+1});return m};
+function parseVec(s){if(!s)return null;const a=String(s).split(/[;, ]+/).map(Number);return a.length>=3&&a.slice(0,3).every(Number.isFinite)?a.slice(0,3):null}
+function changed(a,b){const x=parseVec(a),y=parseVec(b);return x&&y&&x.some((v,i)=>Math.abs(v-y[i])>0.001)}
+function duration(rows){const ts=rows.map(r=>new Date(r.Timestamp).getTime()).filter(Number.isFinite);if(ts.length<2)return '—';let sec=Math.max(0,(Math.max(...ts)-Math.min(...ts))/1000);return `${Math.floor(sec/60)}m ${Math.round(sec%60)}s`}
+function fillSelect(id, values){const s=$(id),old=s.value;s.innerHTML='<option value="">All</option>'+values.sort().map(v=>`<option>${esc(v)}</option>`).join('');s.value=values.includes(old)?old:''}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const palette=['#3157d5','#0e8a83','#d97706','#8b5cf6','#c2414b','#0891b2','#64748b','#65a30d'];
+function drawTimeline(id,rows,key){
+ const c=$(id),ctx=c.getContext('2d'),parent=c.parentElement;
+ const usable=rows.filter(r=>val(r,'Timestamp')&&val(r,key));
+ const height=260; parent.style.height=height+'px'; c.style.height=height+'px';
+ const rect=parent.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.max(280,rect.width-2);
+ c.width=Math.round(w*dpr);c.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+ ctx.clearRect(0,0,w,height);
+ if(!usable.length){ctx.fillStyle='#697586';ctx.font='12px Arial';ctx.fillText('No timestamped data',12,25);return}
+ const parsed=usable.map(r=>({t:new Date(val(r,'Timestamp')).getTime(),v:clean(val(r,key))})).filter(x=>Number.isFinite(x.t));
+ if(!parsed.length){ctx.fillText('Timestamp format not recognised',12,25);return}
+ const categories=[...new Set(parsed.map(x=>x.v))],left=categories.length>5?112:95,right=18,top=18,bottom=34;
+ const plotW=w-left-right,plotH=height-top-bottom,minT=Math.min(...parsed.map(x=>x.t)),maxT=Math.max(...parsed.map(x=>x.t));
+ const x=t=>left+(maxT===minT?0:(t-minT)/(maxT-minT))*plotW;
+ ctx.font='11px Arial';ctx.textAlign='right';ctx.textBaseline='middle';
+ categories.forEach((cat,i)=>{
+   const y=top+(i+.5)*plotH/categories.length;
+   ctx.strokeStyle='#e7ebf1';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+   ctx.fillStyle='#596579';ctx.fillText(cat.length>17?cat.slice(0,16)+'…':cat,left-8,y);
+ });
+ // Events are positioned by their actual timestamp, not by row index.
+ parsed.forEach((item,i)=>{
+   const ci=categories.indexOf(item.v),y=top+(ci+.5)*plotH/categories.length;
+   ctx.fillStyle=palette[ci%palette.length];ctx.beginPath();ctx.arc(x(item.t),y,3.6,0,Math.PI*2);ctx.fill();
+ });
+ ctx.fillStyle='#697586';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+ const fmt=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ ctx.fillText(fmt(minT),left,height-9);ctx.fillText(fmt(maxT),w-right,height-9);
+ if(maxT>minT)ctx.fillText('Time',left+plotW/2,height-9);
+} 
+function drawChangeTimeline(id,rows){
+ const c=$(id),ctx=c.getContext('2d'),parent=c.parentElement,height=260;
+ parent.style.height=height+'px';c.style.height=height+'px';
+ const rect=parent.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.max(280,rect.width-2);
+ c.width=Math.round(w*dpr);c.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,height);
+ const points=[];
+ for(let i=1;i<rows.length;i++){
+   const t=new Date(val(rows[i],'Timestamp')).getTime();if(!Number.isFinite(t))continue;
+   points.push({t,pos:changed(val(rows[i-1],'GlobalPosition'),val(rows[i],'GlobalPosition')),rot:changed(val(rows[i-1],'GlobalRotation'),val(rows[i],'GlobalRotation'))});
+ }
+ if(!points.length){ctx.fillStyle='#697586';ctx.font='12px Arial';ctx.fillText('No timestamped transform data',12,25);return}
+ const minT=Math.min(...points.map(p=>p.t)),maxT=Math.max(...points.map(p=>p.t)),left=24,right=20,top=22,bottom=34,plotW=w-left-right,plotH=height-top-bottom;
+ const xx=t=>left+(maxT===minT?0:(t-minT)/(maxT-minT))*plotW;
+ ctx.strokeStyle='#e7ebf1';ctx.beginPath();ctx.moveTo(left,top+plotH/2);ctx.lineTo(w-right,top+plotH/2);ctx.stroke();
+ points.forEach(p=>{if(p.pos){ctx.fillStyle=palette[0];ctx.beginPath();ctx.arc(xx(p.t),top+plotH*.32,4,0,Math.PI*2);ctx.fill()}if(p.rot){ctx.fillStyle=palette[1];ctx.beginPath();ctx.arc(xx(p.t),top+plotH*.72,4,0,Math.PI*2);ctx.fill()}});
+ ctx.fillStyle='#697586';ctx.font='11px Arial';ctx.textAlign='left';ctx.fillText('Position change',left,top+plotH*.32-10);ctx.fillText('Rotation change',left,top+plotH*.72-10);
+ const fmt=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});ctx.textAlign='center';ctx.fillText(fmt(minT),left,height-9);ctx.fillText(fmt(maxT),w-right,height-9);
+}
+function render(){
+ const sf=$('screenFilter').value,af=$('activityFilter').value;
+ const rows=allRows.filter(r=>(!sf||val(r,'ScreenType')===sf)&&(!af||val(r,'ActivitySet')===af));
+ $('dashboard').hidden=false;$('empty').hidden=true;
+ $('mRows').textContent=rows.length.toLocaleString();$('mDuration').textContent=duration(rows);
+ $('mActivity').textContent=rows.filter(r=>val(r,'ScreenType')==='Activity').length;
+ $('mEnds').textContent=rows.filter(r=>String(val(r,'ActivityCorrectEnd')).toLowerCase()==='true').length;
+ drawTimeline('screenChart',rows,'ScreenType');
+ drawTimeline('activityChart',rows,'ActivitySet');
+ drawTimeline('answerChart',rows,'AnswerMarked');
+ drawTimeline('statusChart',rows,'Status');
+ drawTimeline('objectChart',rows,'ObjectInFocus');
+ const groups={};rows.forEach(r=>{let k=clean(val(r,'ActivitySet'));(groups[k]??=[]).push(r)});
+ $('activityTable').innerHTML=Object.entries(groups).map(([k,g])=>`<tr><td>${esc(k)}</td><td>${g.length}</td><td>${esc([...new Set(g.map(r=>clean(val(r,'ObjectInFocus'))))].join(', '))}</td><td>${esc([...new Set(g.map(r=>clean(val(r,'AnswerMarked'))))].join(', '))}</td><td>${g.filter(r=>String(val(r,'ActivityCorrectEnd')).toLowerCase()==='true').length}</td></tr>`).join('');
+ $('recordsTable').innerHTML=rows.slice(-30).reverse().map(r=>`<tr><td>${esc(val(r,'Timestamp'))}</td><td>${esc(val(r,'ScreenType'))}</td><td>${esc(clean(val(r,'ActivitySet')))}</td><td>${esc(clean(val(r,'ObjectInFocus')))}</td><td>${esc(val(r,'Status'))}</td><td>${esc(clean(val(r,'AnswerMarked')))}</td><td>${String(val(r,'ActivityCorrectEnd')).toLowerCase()==='true'?'Yes':'No'}</td></tr>`).join('');
+ // Consecutive transform changes, using whatever transform fields are present.
+ drawChangeTimeline('movementChart',rows);
+}
+$('csvFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{allRows=parseCSV(reader.result);if(!allRows.length)throw Error('No data rows found');$('fileName').textContent=`${f.name} · ${allRows.length} rows`;fillSelect('screenFilter',[...new Set(allRows.map(r=>val(r,'ScreenType')).filter(Boolean))]);fillSelect('activityFilter',[...new Set(allRows.map(r=>val(r,'ActivitySet')).filter(Boolean))]);render()}catch(err){alert('Could not read this CSV: '+err.message)}};reader.readAsText(f)});
+$('screenFilter').addEventListener('change',render);$('activityFilter').addEventListener('change',render);
+$('resetFilters').addEventListener('click',()=>{$('screenFilter').value='';$('activityFilter').value='';render()});
+window.addEventListener('resize',()=>{if(allRows.length)render()});
+</script>
+</body>
+</html>

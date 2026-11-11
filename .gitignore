@@ -1,0 +1,70 @@
+# ============================================================
+# Mitra - Unity, Micro:bit, assessment and dashboard project
+# ============================================================
+
+# --- Unity generated folders (match at any directory depth) ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity-generated IDE/project files
+.vs/
+.idea/
+.gradle/
+ExportedObj/
+.consulo/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.tmp
+*.bak
+
+# Keep Unity metadata files: do not ignore *.meta
+# Keep Packages/ and ProjectSettings/ for reproducible Unity setup.
+
+# --- Exclude report, but keep LA-Reflect shortcut files ---
+/Report/
+
+# --- Runtime-generated learner/session data ---
+**/Session_*.csv
+**/Logs/
+**/Recordings/
+**/WebcamCaptures/
+**/Screenshots/
+
+# --- Local machine / editor files ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+.directory
+*.lnk
+
+# --- Temporary and diagnostic files ---
+*.log
+*.stackdump
+*.crash
+*.dmp
+
+# --- Repository listing generated for inspection ---
+/directory_structure.txt
+
+# --- Secrets and local environment configuration ---
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
